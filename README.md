@@ -701,3 +701,622 @@
     }
   ]
   ```
+
+
+## Aggregations:
+### Pipeline Stages:
+#### $addFields:
+- Notes:
+  - Adds new fields to documents. $addFields outputs documents that contain all existing fields from the input documents and newly added fields.
+  - The $addFields stage is equivalent to a $project stage that explicitly specifies all existing fields in the input documents and adds the new fields.
+  - You can include one or more $addFields stages in an aggregation operation.
+  - To add an element to an existing array field with $addFields, use with $concatArrays.
+- data:
+  ```
+  [
+    {
+        _id: 1,
+        student: "Maya",
+        homework: [10, 5, 10],
+        quiz: [10, 8],
+        extraCredit: 0,
+        address: {
+          dNo: 4-45,
+          place: "Hyderabad",
+          state: "Telanagana"
+        },
+        hobbies: ["Gym"],
+        passion: ["acting"]
+    },
+    {
+        _id: 2,
+        student: "Ryan",
+        homework: [5, 6, 5],
+        quiz: [8, 8],
+        extraCredit: 8,
+        address: {
+          dNo: 3-45,
+          place: "Hyderabad",
+          state: "Telanagana"
+        },
+        hobbies: ["cycling"],
+        passion: ["blogging"]
+    }
+  ]
+  ```
+- Query: Add all the homework marks and quiz marks separately and again add these both and extraCredit.
+  ```
+  const pipeline = [
+    {
+      $match: {
+        _id: 2
+      }
+    },
+    {
+      $addFields: {
+        homeworkmarks: { $sum: "$homework" },
+        quizmarks: { $sum: "$quiz" },
+        // to add extra fields in object
+        "address.landmark": "Wipro Circle",
+        "address.pinCode": "500032",
+        // to add into array
+        hobbies: {
+          $concatArrays: ["$hobbies", ["painting"], "$passion" ]
+        }
+      }
+    },
+    {
+      $addFields: {
+        totalMarks: {
+          $sum: [ "$homeworkmarks", "$quizmarks", "$extraCredit" ]
+        }
+      }
+    }
+  ]
+  ```
+- Output:
+  ```
+  [
+    {
+        _id: 2,
+        student: "Ryan",
+        homework: [5, 6, 5],
+        quiz: [8, 8],
+        extraCredit: 8,
+        homeworkmarks: 16,
+        quizmarks: 16,
+        totalMarks: 40,
+        address: {
+          dNo: -42,
+          place: 'Hyderabad',
+          state: 'Telanagana',
+          landmark: 'Wipro Circle',
+          pinCode: '500032'
+        },
+        hobbies: [ 'cycling', 'painting', 'blogging' ],
+        passion: [ 'blogging' ],
+    }
+  ]
+  ```
+#### $bucket:
+- Notes:
+  - Categorizes incoming documents into groups, called buckets, based on a specified expression and bucket boundaries and outputs a document per each bucket. Each output document contains an _id field whose value specifies the inclusive lower bound of the bucket. The output option specifies the fields included in each output document.
+  - $bucket  only produces output documents for buckets that contain at least one input document.
+- Data:
+  ```
+  [
+    { "_id": 1, "last_name": "Bernard", "first_name": "Emil", "year_born": 1868, "year_died": 1941, "nationality": "France" },
+    { "_id": 2, "last_name": "Rippl-Ronai", "first_name": "Joszef", "year_born": 1861, "year_died": 1927, "nationality": "Hungary" },
+    { "_id": 3, "last_name": "Ostroumova", "first_name": "Anna", "year_born": 1871, "year_died": 1955, "nationality": "Russia" },
+    { "_id": 4, "last_name": "Van Gogh", "first_name": "Vincent", "year_born": 1853, "year_died": 1890, "nationality": "Holland" },
+    { "_id": 5, "last_name": "Maurer", "first_name": "Alfred", "year_born": 1868, "year_died": 1932, "nationality": "USA" },
+    { "_id": 6, "last_name": "Munch", "first_name": "Edvard", "year_born": 1863, "year_died": 1944, "nationality": "Norway" },
+    { "_id": 7, "last_name": "Redon", "first_name": "Odilon", "year_born": 1840, "year_died": 1916, "nationality": "France" },
+    { "_id": 8, "last_name": "Diriks", "first_name": "Edvard", "year_born": 1855, "year_died": 1930, "nationality": "Norway" }
+  ]
+  ```
+- Query:
+  ```
+  const pipeline = [
+    {
+      $bucket: {
+        groupBy: "$year_born",                           // Field to group by
+        boundaries: [1840, 1850, 1860, 1870, 1880],      // Boundaries for the buckets
+        default: "Others",                               // Bucket ID for documents which do not fall into a bucket
+        output: {                                        // Output for each bucket
+          total: { $sum: 1},
+          artists: {
+            $push: {
+              name: { $concat: [ "$first_name", " ", "$last_name"] },
+              year_born: "$year_born"
+            }
+          }
+        }
+      }
+    }
+  ]
+  ```
+- Output:
+  ```
+  [
+    {
+      _id: 1840, // boundary as _id
+      total: 1,  // $sum is added by 1 for each record.
+      artists: [
+        { name: 'Odilon Redon', year_born: 1840 }
+      ]
+    },
+    {
+      _id: 1850,
+      total: 2,
+      artists: [
+          { name: 'Vincent Van Gogh', year_born: 1853 },
+          { name: 'Edvard Diriks', year_born: 1855 }
+      ]
+    },
+    {
+      _id: 1860,
+      total: 4,
+      artists: [
+          { name: 'Emil Bernard', year_born: 1868 },
+          { name: 'Joszef Rippl-Ronai', year_born: 1861 },
+          { name: 'Alfred Maurer', year_born: 1868 },
+          { name: 'Edvard Munch', year_born: 1863 }
+      ]
+    },
+    {
+      _id: 1870,
+      total: 1,
+      artists: [
+          { name: 'Anna Ostroumova', year_born: 1871 }
+      ]
+    }
+  ]
+  ```
+
+#### $count:
+- data:
+  ```
+  [
+    {
+        fname: "maddala",
+        middlename: "Jai",
+        lname: "Shankar"
+    },
+    {
+        fname: "maddala",
+        middlename: "veera nooka",
+        lname: "Govind"
+   }
+  ]
+  ```
+- Query: Return the count of ppl whose fname is maddala.
+  ```
+  const pipeline = [
+    {
+      $match: {
+        fname: "maddala"
+      }
+    },
+    {
+        $count: "length"
+    }
+  ]
+  db.collection.aggregate(pipeline);
+  ```
+- Output:
+  ```
+  {
+    length: 2
+  }
+  ```
+
+#### $group:
+- data:
+  ```
+  [
+    { "_id": 1, "item": "abc", "price": parseFloat("10"), "quantity": parseInt("2"), },
+    { "_id": 2, "item": "jkl", "price": parseFloat("20"), "quantity": parseInt("1"), },
+    { "_id": 3, "item": "xyz", "price": parseFloat("5"), "quantity": parseInt("10"), },
+    { "_id": 4, "item": "xyz", "price": parseFloat("5"), "quantity": parseInt("20"), },
+    { "_id": 5, "item": "abc", "price": parseFloat("10"), "quantity": parseInt("10"), },
+    { "_id": 6, "item": "def", "price": parseFloat("7.5"), "quantity": parseInt("5"), },
+    { "_id": 7, "item": "def", "price": parseFloat("7.5"), "quantity": parseInt("10"), },
+    { "_id": 8, "item": "abc", "price": parseFloat("10"), "quantity": parseInt("5"), },
+  ]
+  ```
+- Query:
+  ```
+  const pipeline = [
+    {
+      $group: {
+        _id: "$item",
+        total_quantity: { $push: "$quantity" },
+        each_cost: { $first: "$price" },
+        total_cost: { $sum: { $multiply:  [ "$price", "$quantity"] } },
+        min: { $min: "$quantity" },
+        max: { $max: "$quantity" },
+        all_details: {
+          $push: "$$ROOT"
+        }
+      }
+    }
+  ]
+  ```
+- Output:
+  ```
+  [
+    {
+      _id: 'abc',
+      total_quantity: [ 2, 10, 5],
+      each_cost: 10,
+      total_cost: 170,
+      min: 2,
+      max: 10,
+      all_details: [
+        {
+          _id: 1,
+          item: 'abc',
+          price: 10,
+          quantity: 2
+        },
+        {
+          _id: 5,
+          item: 'abc',
+          price: 10,
+          quantity: 10
+        },
+        {
+          _id: 8,
+          item: 'abc',
+          price: 10,
+          quantity: 5
+        }
+      ]
+    },
+    .....
+
+    {
+      _id: 'def',
+      total_quantity: [ 5, 10 ],
+      each_cost: 7.5,
+      total_cost: 112.5,
+      min: 5,
+      max: 10,
+      all_details: [
+        {
+          _id: 6,
+          item: 'def',
+          price: 7.5,
+          quantity: 5
+        },
+        {
+          _id: 7,
+          item: 'def',
+          price: 7.5,
+          quantity: 10
+        }
+      ]
+    }
+  ]
+  ```
+
+#### $limit:
+- data:
+  ```
+  [
+        { "_id": 1, "item": "abc", "price": parseFloat("10"), "quantity": parseInt("2"), },
+        { "_id": 2, "item": "jkl", "price": parseFloat("20"), "quantity": parseInt("1"), },
+        { "_id": 3, "item": "xyz", "price": parseFloat("5"), "quantity": parseInt("10"), },
+        { "_id": 4, "item": "xyz", "price": parseFloat("5"), "quantity": parseInt("20"), },
+        { "_id": 5, "item": "abc", "price": parseFloat("10"), "quantity": parseInt("10"), },
+        { "_id": 6, "item": "def", "price": parseFloat("7.5"), "quantity": parseInt("5"), },
+        { "_id": 7, "item": "def", "price": parseFloat("7.5"), "quantity": parseInt("10"), },
+        { "_id": 8, "item": "abc", "price": parseFloat("10"), "quantity": parseInt("5"), },
+  ]
+  ```
+- Query:
+  ```
+  const pipeline = [
+    {
+      $limit: 1
+    }
+  ]
+  ```
+- Output:
+  ```
+  [
+    { "_id": 1, "item": "abc", "price": parseFloat("10"), "quantity": parseInt("2") }
+  ]
+  ```
+
+#### $sort:
+- Query: For above data, sort by _id in descending order.
+  ```
+  const pipeline = [
+    {
+      $limit: 5
+    },
+    {
+      $sort: { _id: -1 } // -1 for descending, 1 for ascending
+    }
+  ]
+  ```
+- Output:
+  ```
+  [
+    { "_id": 5, "item": "abc", "price": parseFloat("10"), "quantity": parseInt("10"), },
+    { "_id": 4, "item": "xyz", "price": parseFloat("5"), "quantity": parseInt("20"), },
+    { "_id": 3, "item": "xyz", "price": parseFloat("5"), "quantity": parseInt("10"), },
+    { "_id": 2, "item": "jkl", "price": parseFloat("20"), "quantity": parseInt("1"), },
+    { "_id": 1, "item": "abc", "price": parseFloat("10"), "quantity": parseInt("2"), },
+  ]
+  ```
+
+#### $lookup:
+- data-1: [collection: "names"]
+  ```
+  [
+    {
+      _id: 1,
+      name: "Govind Maddala",
+      colg_id: 11,
+      loc_id: 444
+    },
+    {
+        _id: 2,
+        name: "Akhil Koduri",
+        colg_id: 11,
+        loc_id: 111
+    },
+    {
+        _id: 3,
+        name: "Akhil Nagulamalli",
+        colg_id: 22,
+        loc_id: 222
+    }
+  ]
+  ```
+- data-2: [collection: "colg"]
+  ```
+  [
+    {
+        _id: 11,
+        colgName: "NIT Raipur"
+    },
+    {
+        _id: 22,
+        colgName: "NIT Jamshedpur"
+    },
+    {
+        _id: 33,
+        colgName: "Simhadri Colg"
+    }
+  ]
+  ```
+- data-3: [collection: "howConnected"]
+  ```
+  [
+    {
+        _id: 111,
+        loc: "Engg"
+    },
+    {
+        _id: 222,
+        loc: "JSW"
+    },
+    {
+        _id: 333,
+        loc: "Enmovil"
+    },
+    {
+        _id: 444,
+        loc: "Life"
+    },
+  ]
+  ```
+- Query: for name: "Govind Maddala", get all the details.
+  ```
+  const pipeline = [
+    {
+      $match: {
+        name: "Govind Maddala"
+      }
+    },
+    {
+      $lookup: {
+        from: "colg",
+        localField: "colg_id",
+        foreignField: "_id",
+        as: "colg_name"
+      }
+    },
+    {
+      $lookup: {
+        from: "howConnected",
+        localField: "loc_id",
+        foreignField: "_id",
+        as: "how_connected"
+      }
+    },
+    {
+      $replaceRoot: {
+        newRoot: {
+          $mergeObjects: [
+            {
+              name: "$name",
+              collegeName: { $arrayElemAt: ["$colg_name.colgName",0]},
+              how_connected: { $arrayElemAt: ["$how_connected.loc",0]}
+            }
+          ]
+        }
+      }
+    }
+  ]
+  ```
+- Output:
+  ```
+  [
+    {
+      name: 'Govind Maddala',
+      collegeName: [
+        {
+          _id: 11,
+          colgName: 'NIT Raipur'
+        }
+      ],
+      howConnected: [
+        {
+          _id: 444,
+          loc: 'Life'
+        }
+      ]
+    }
+  ]
+
+  // With $replaceRoot pipeline stage:
+  {
+    name: 'Govind Maddala',
+    collegeName: 'NIT Raipur',
+    howConnected: 'Life'
+  }
+  ```
+
+#### $match:
+- Notes:
+  - Filters the documents to pass only the documents that match the specified condition(s) to the next pipeline stage.
+  - similar to query provided in find
+- Data:
+  ```
+  [
+    { "_id": new ObjectId("512bc95fe835e68f199c8686"), "author": "dave", "score": 80, "views": 100 },
+    { "_id": new ObjectId("512bc962e835e68f199c8687"), "author": "dave", "score": 85, "views": 521 },
+    { "_id": new ObjectId("55f5a192d4bede9ac365b257"), "author": "ahn", "score": 60, "views": 1000 },
+    { "_id": new ObjectId("55f5a192d4bede9ac365b258"), "author": "li", "score": 55, "views": 5000 },
+    { "_id": new ObjectId("55f5a1d3d4bede9ac365b259"), "author": "annT", "score": 60, "views": 50 },
+    { "_id": new ObjectId("55f5a1d3d4bede9ac365b25a"), "author": "li", "score": 94, "views": 999 },
+    { "_id": new ObjectId("55f5a1d3d4bede9ac365b25b"), "author": "ty", "score": 95, "views": 1000 }
+  ]
+  ```
+- Query: 
+  - For normal find query:
+    ```
+    {
+        author: "dave",
+        $or:[{score:{$gte:81}},{views:{eq:521}}]
+    }
+    ```
+  - Using aggregate, the same query is: 
+    ```
+    const pipeline = [
+      {
+        $match: {
+          author: "dave",
+          $or:[{score:{$gte:81}},{views:{eq:521}}]
+        }
+      }
+    ]
+    db.collection.aggregate(pipeline)
+    ```
+- Output:
+  ```
+  [
+   { "_id": new ObjectId("512bc962e835e68f199c8687"), "author": "dave", "score": 85, "views": 521 }, 
+  ]
+  ```
+
+#### $merge:
+- Notes:
+  - Writes the results of the aggregation pipeline to a specified collection.
+  - The $merge operator must be the last stage in the pipeline.
+  - Can output to a collection in the same or different database.
+  - Read operations of the $merge statement are sent to secondary nodes, while the write operations occur only on the primary node.
+  - Creates a new collection if the output collection does not already exist.
+  - Can incorporate results (insert new documents, merge documents, replace documents, keep existing documents, fail the operation, process documents with a custom update pipeline) into an existing collection.
+- Data:
+  ```
+  [
+    { "_id": new ObjectId("512bc95fe835e68f199c8686"), "author": "dave", "score": 80, "views": 100 },
+    { "_id": new ObjectId("512bc962e835e68f199c8687"), "author": "dave", "score": 85, "views": 521 },
+    { "_id": new ObjectId("55f5a192d4bede9ac365b257"), "author": "ahn", "score": 60, "views": 1000 },
+    { "_id": new ObjectId("55f5a192d4bede9ac365b258"), "author": "li", "score": 55, "views": 5000 },
+    { "_id": new ObjectId("55f5a1d3d4bede9ac365b259"), "author": "annT", "score": 60, "views": 50 },
+    { "_id": new ObjectId("55f5a1d3d4bede9ac365b25a"), "author": "li", "score": 94, "views": 999 },
+    { "_id": new ObjectId("55f5a1d3d4bede9ac365b25b"), "author": "ty", "score": 95, "views": 1000 }
+  ]
+  ```
+- Query: The output of output1 should be merged into a collection named "mergedColl"
+  ```
+  const pipeline1 = [
+      {
+        $match: {
+          author: "dave",
+          $or:[{score:{$gte:81}},{views:{eq:521}}]
+        }
+      }
+  ]
+
+  const pipeline = [
+    {
+      $match: {
+        author: "dave",
+        $or:[{score:{$gte:81}},{views:{eq:521}}]
+      }
+    },
+    {
+      $merge: {
+        into: "mergedColl"
+      }
+    }
+  ]
+
+  await db.collection.aggregate(pipeline);
+  //Now:
+  await database.connect("aggregate", "mergedColl").collection().find().toArray();
+  ```
+- Output:
+  ```
+  [
+   { "_id": new ObjectId("512bc962e835e68f199c8687"), "author": "dave", "score": 85, "views": 521 }, 
+  ]
+  ```
+
+#### $out:
+- Notes:
+  -  Takes the documents returned by the aggregation pipeline and writes them to a specified collection.
+  -  must be the last stage in the pipeline. 
+  -  The $out operator lets the aggregation framework return result sets of any size.
+  -  Warning: replaces the specified collection if it exists.
+  -  Syntax: { $out: { db: "output-db", coll: "output-collection" } }
+  -  Importance: 
+     -  You cannot specify a sharded collection as the output collection. And the input collection for a pipeline can be sharded. 
+     -  To output to a sharded collection, use $merge
+- Data: (above)
+- Query:
+  ```
+  const pipeline = [
+    {
+      $match: {
+        author: "dave",
+        $or:[{score:{$gte:81}},{views:{eq:521}}]
+      }
+    },
+    {
+      $out: "mergedColl" // in same database with new collection name, 
+      (or)
+      $out: { db: "outerDB, coll: outerColl }
+    }
+  ]
+
+  await db.collection.aggregate(pipeline);
+  //Now:
+  await database.connect("outerDB", "outerColl").collection().find().toArray();
+  ```
+- Output:
+  ```
+  [
+   { "_id": new ObjectId("512bc962e835e68f199c8687"), "author": "dave", "score": 85, "views": 521 }, 
+  ]
+  ```
+
+### Pipeline Operators:
