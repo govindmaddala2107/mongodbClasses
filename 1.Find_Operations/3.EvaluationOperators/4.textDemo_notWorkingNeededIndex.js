@@ -13,6 +13,7 @@ const insertData = async () => {
     ]
 
     const db = await databaseConnect("textBasedDemo");
+    await db.collection.createIndex({ subject: "text",  author: "text" }); // Now it searches both subject and author also.
     var insertedDataResult = await db.collection.insertMany(data);
     console.log(insertedDataResult);
     await db.client.close();
